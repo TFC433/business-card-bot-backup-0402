@@ -1,0 +1,36 @@
+{
+  "name": "business-card-line-bot",
+  "version": "1.0.0",
+  "description": "AI名片識別 LINE Bot - 整合OCR、AI解析、搜尋與編輯功能",
+  "main": "line-bot.js",
+  "scripts": {
+    "start": "node line-bot.js",
+    "dev": "nodemon line-bot.js",
+    "test": "node --version && echo 'Testing LINE Bot...'",
+    "ngrok": "ngrok http 3000",
+    "setup": "echo 'Setting up LINE Bot...' && npm install"
+  },
+  "keywords": [
+    "line-bot",
+    "ocr",
+    "ai", 
+    "business-card",
+    "gemini",
+    "google-vision"
+  ],
+  "author": "ShihRM",
+  "license": "MIT",
+  "dependencies": {
+    "@line/bot-sdk": "^8.0.0",
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1",
+    "googleapis": "^126.0.1",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

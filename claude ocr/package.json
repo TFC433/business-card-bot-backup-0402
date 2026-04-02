@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "googleapis": "^156.0.0",
+    "jieba-js": "^1.0.2",
+    "pinyin": "^4.0.0",
+    "sharp": "^0.34.3"
+  }
+}

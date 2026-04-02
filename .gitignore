@@ -1,0 +1,17 @@
+# 忽略所有環境變數檔案
+.env
+
+# 忽略所有 Google 憑證檔案
+oauth-credentials.json
+oauth-token.json
+credentials.json
+
+# 忽略 Node.js 的依賴套件資料夾
+node_modules/
+
+# 忽略暫存圖片目錄
+temp/
+
+# 忽略 Python 虛擬環境
+__pycache__/
+*.pyc
