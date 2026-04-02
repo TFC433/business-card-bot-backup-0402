@@ -1,4 +1,13 @@
-// message-builder.js - 訊息格式化器 (V6.5 - 無省略完整版)
+/**
+ * File: claude ocr/line bot/message-builder.js
+ * Version: 6.6
+ * Date: 2026-04-02
+ * * Changelog:
+ * - [2026-04-02] V6.6: Fix HTTP 400 error in duplicate confirm flow. Added .filter(Boolean) to body.contents array in buildDuplicateConfirmMessage to strictly prevent null values from entering the LINE Flex payload.
+ * - [Previous] V6.5: 無省略完整版
+ */
+
+// message-builder.js - 訊息格式化器 (V6.5 - 無省略完整版 -> V6.6 - Bug Fix)
 const configLine = require('./config-line');
 
 class MessageBuilder {
@@ -69,7 +78,7 @@ class MessageBuilder {
                         { type: 'separator', margin: 'lg' },
                         { type: 'text', text: '本次掃描到的新資訊', weight: 'bold', size: 'md', margin: 'lg' },
                         ...(newFields.length > 0 ? newFields : [{ type: 'text', text: '(本次未掃描到新的聯絡資訊)', size: 'sm', color: '#888888', margin: 'md' }])
-                    ]
+                    ].filter(Boolean)
                 },
                 footer: {
                     type: 'box',
