@@ -89,11 +89,6 @@ class MessageBuilder {
                             type: 'button',
                             style: 'primary',
                             color: '#1DB446',
-                            action: { type: 'message', label: '✅ 更新此人資料', text: `更新 ${existingContact.rowIndex}` }
-                        },
-                        {
-                            type: 'button',
-                            style: 'secondary',
                             action: { type: 'message', label: '➕ 強制建立為新聯絡人', text: '強制新增' }
                         },
                         {
@@ -234,14 +229,15 @@ class MessageBuilder {
 
     buildSaveSuccessMessage(driveLink) { 
         let text = '✅ 資料儲存成功！\n\n'; 
-        text += '所有資訊已歸檔至 [ FANUC force潛在客戶總覽 ] 中。\n\n'; 
-        text += '📸 您的名片圖片已同步備份至雲端。\n';
-        text += '🔗 點擊查看：https://tfc-crm-system.onrender.com/leads-view.html\n\n';
+        text += '這張名片已成功儲存。\n\n'; 
+        text += '📸 名片圖片已同步備份至雲端。\n\n';
         text += '您可以繼續掃描下一張名片。'; 
         return { type: 'text', text: text }; 
     }
 
-    buildSaveFailedMessage(error = '未知的錯誤') { let text = '❌ 資料儲存失敗\n\n'; text += `原因：${error}\n\n`; text += '資料尚未被儲存，請檢查您的 Google 服務權限或稍後再試。'; return { type: 'text', text: text, quickReply: { items: [ { type: 'action', action: { type: 'message', label: '🔄 再試一次', text: '儲存' }}, { type: 'action', action: { type: 'message', label: '重新識別', text: '重新識別' }} ] } }; }
+    buildAlreadySavedMessage() { return { type: 'text', text: 'ℹ️ 這則 LINE 名片訊息已經儲存過，未重複建立新資料。\n\n您可以繼續掃描下一張名片。' }; }
+    buildUpdateTemporarilyUnavailableMessage(rowIndex) { return { type: 'text', text: `⚠️ 更新既有資料功能暫時停用。\n\n目前無法更新 #${rowIndex} 的歷史資料；如需保留本次掃描結果，請選擇「強制新增」建立新名片。`, quickReply: { items: [ { type: 'action', action: { type: 'message', label: '➕ 強制新增', text: '強制新增' }}, { type: 'action', action: { type: 'message', label: '❌ 取消', text: '取消' }} ] } }; }
+    buildSaveFailedMessage(error = '未知的錯誤') { let text = '❌ 資料儲存失敗\n\n'; text += `原因：${error}\n\n`; text += '資料尚未被儲存，請稍後再試或聯絡系統管理員。'; return { type: 'text', text: text, quickReply: { items: [ { type: 'action', action: { type: 'message', label: '🔄 再試一次', text: '儲存' }}, { type: 'action', action: { type: 'message', label: '重新識別', text: '重新識別' }} ] } }; }
     buildUpdatedResult(fieldLabel, newValue) { return { type: 'text', text: `✅ ${fieldLabel} 已更新為：\n${newValue}\n\n您可以繼續修改其他欄位，或點選下方按鈕完成儲存。`, quickReply: { items: [ { type: 'action', action: { type: 'message', label: '✏️ 返回編輯', text: '編輯' } }, { type: 'action', action: { type: 'message', label: '✅ 確認儲存', text: '儲存' } } ] } }; }
     buildSearchPromptMessage() { return { type: 'text', text: '🔍 已進入搜尋模式，請輸入您想查詢的姓名或公司。\n\n（或點選下方按鈕退出）', quickReply: this.cancelSearchQuickReply }; }
     get cancelSearchQuickReply() { return { items: [{ type: 'action', action: { type: 'message', label: '❌ 取消搜尋', text: '取消' } }] }; }

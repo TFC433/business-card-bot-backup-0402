@@ -2,11 +2,13 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const crypto = require('crypto');
 const configLine = require('./config-line');
 const MessageBuilder = require('./message-builder');
 const SearchService = require('./search-service');
 const EditService = require('./edit-service');
 const MainProcessor = require('../main-processor');
+const RawContactSupabaseService = require('../raw-contact-supabase-service');
 const quotaService = require('./quota-service');
 
 class WebhookHandler {
@@ -16,6 +18,7 @@ class WebhookHandler {
         this.searchService = new SearchService();
         this.editService = new EditService();
         this.mainProcessor = new MainProcessor();
+        this.rawContactSupabaseService = new RawContactSupabaseService();
         this.userStates = new Map();
         this.tempData = new Map();
         this.processingUsers = new Set();
@@ -308,7 +311,7 @@ class WebhookHandler {
         if (text.startsWith('更新')) {
             const rowIndex = parseInt(text.replace('更新', '').trim(), 10);
             if (!isNaN(rowIndex)) {
-                return await this.executeUpdate(event, rowIndex);
+                return await this.client.replyMessage(event.replyToken, this.messageBuilder.buildUpdateTemporarilyUnavailableMessage(rowIndex));
             }
         } else if (text === '強制新增') {
             this.userStates.set(userId, configLine.userStates.CONFIRMING);
@@ -361,20 +364,62 @@ class WebhookHandler {
         const userId = event.source.userId;
         const tempData = this.tempData.get(userId);
         if (!tempData) return this.replySessionExpired(event.replyToken);
-        
+
+        let cardId = null;
+        let driveResult = null;
+
         try {
+            if (!tempData.messageId) {
+                throw new Error('缺少LINE訊息ID，無法儲存。');
+            }
+
+            const existingCapture = await this.rawContactSupabaseService.findBySourceMessageId(tempData.messageId);
+            if (existingCapture) {
+                await this.client.replyMessage(event.replyToken, this.messageBuilder.buildAlreadySavedMessage());
+                return;
+            }
+
+            cardId = crypto.randomUUID();
             const profile = await this.client.getProfile(userId);
             const userInfo = { userId, displayName: profile.displayName };
-            
+
             // 重要：這裡使用的 tempData.imagePath 必須是有效的
-            const driveResult = await this.mainProcessor.storageService.uploadToDrive(tempData.imagePath, tempData.data, userInfo);
-            await this.mainProcessor.storageService.writeToSheets(tempData.data, driveResult, tempData.processingTime, tempData.imagePath, userInfo, tempData.messageId);
-            
+            driveResult = await this.mainProcessor.storageService.uploadToDrive(tempData.imagePath, tempData.data, userInfo);
+            const payload = this.buildRawContactPayload({ cardId, tempData, driveResult, userInfo });
+
+            try {
+                await this.rawContactSupabaseService.insertCapture(payload);
+            } catch (error) {
+                if (error.category === 'unique_conflict') {
+                    const existingAfterConflict = await this.rawContactSupabaseService.findBySourceMessageId(tempData.messageId);
+                    if (existingAfterConflict && existingAfterConflict.source_message_id === tempData.messageId) {
+                        console.warn('⚠️ Supabase重複儲存競態:', {
+                            card_id: cardId,
+                            source_message_id: tempData.messageId,
+                            drive_file_id: driveResult.id
+                        });
+                        await this.client.replyMessage(event.replyToken, this.messageBuilder.buildAlreadySavedMessage());
+                        return;
+                    }
+
+                    if (error.conflictTarget === 'drive_file_id') {
+                        throw new Error('Drive檔案ID已被其他名片記錄使用。');
+                    }
+                }
+                throw error;
+            }
+
             await this.client.replyMessage(event.replyToken, this.messageBuilder.buildSaveSuccessMessage(driveResult.webViewLink));
-            await this.searchService.refreshCache();
 
         } catch (error) {
             console.error('❌ 儲存流程失敗:', error);
+            if (cardId || driveResult) {
+                console.error('🧾 儲存失敗診斷:', {
+                    card_id: cardId,
+                    source_message_id: tempData.messageId,
+                    drive_file_id: driveResult ? driveResult.id : null
+                });
+            }
             await this.client.pushMessage(userId, this.messageBuilder.buildSaveFailedMessage(error.message));
             quotaService.incrementUsage();
         } finally {
@@ -383,26 +428,49 @@ class WebhookHandler {
     }
 
     async executeUpdate(event, rowIndex) {
-        const userId = event.source.userId;
-        const tempData = this.tempData.get(userId);
-        if (!tempData) return this.replySessionExpired(event.replyToken);
-        
+        return await this.client.replyMessage(event.replyToken, this.messageBuilder.buildUpdateTemporarilyUnavailableMessage(rowIndex));
+    }
+
+    buildRawContactPayload({ cardId, tempData, driveResult, userInfo }) {
+        const data = tempData.data || {};
+        return {
+            card_id: cardId,
+            captured_at: new Date().toISOString(),
+            name: this.toNullable(data.name),
+            company: this.toNullable(data.company),
+            position: this.toNullable(data.position),
+            department: this.toNullable(data.department),
+            phone: this.toNullable(data.phone),
+            mobile: this.toNullable(data.mobile),
+            fax: this.toNullable(data.fax),
+            email: this.toNullable(data.email),
+            website: this.toNullable(data.website),
+            address: this.toNullable(data.address),
+            confidence: Number.isFinite(Number(data.confidence)) ? Number(data.confidence) : null,
+            processing_time_ms: Number.isFinite(Number(tempData.processingTime)) ? Math.round(Number(tempData.processingTime) * 1000) : null,
+            drive_file_id: driveResult.id,
+            drive_link: this.toNullable(driveResult.webViewLink),
+            drive_filename: this.toNullable(driveResult.name),
+            source_filename: path.basename(tempData.imagePath),
+            raw_text: this.toNullable(data.rawText),
+            parse_strategy: this.toNullable(data.source),
+            line_user_id: userInfo.userId,
+            user_nickname: this.toNullable(userInfo.displayName),
+            source_message_id: tempData.messageId,
+            raw_payload: this.createRawPayloadSnapshot(data)
+        };
+    }
+
+    toNullable(value) {
+        if (value === undefined || value === null || value === '') return null;
+        return value;
+    }
+
+    createRawPayloadSnapshot(data) {
         try {
-            const profile = await this.client.getProfile(userId);
-            const userInfo = { userId, displayName: profile.displayName };
-
-            await this.mainProcessor.storageService.updateSheetRow(rowIndex, tempData.data, tempData.processingTime, userInfo);
-            
-            const successMessage = { type: 'text', text: `✅ 已成功更新 #${rowIndex} ${tempData.data.name} 的資料！`};
-            await this.client.replyMessage(event.replyToken, successMessage);
-            await this.searchService.refreshCache();
-
+            return JSON.parse(JSON.stringify(data || {}));
         } catch (error) {
-            console.error('❌ 更新流程失敗:', error);
-            await this.client.pushMessage(userId, { type: 'text', text: `❌ 更新失敗: ${error.message}` });
-            quotaService.incrementUsage();
-        } finally {
-            this.cleanupTempData(userId);
+            return {};
         }
     }
 

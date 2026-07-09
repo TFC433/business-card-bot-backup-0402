@@ -8,6 +8,10 @@ module.exports = {
     // Google服務設定
     SPREADSHEET_ID: process.env.SPREADSHEET_ID,
     DRIVE_FOLDER_ID: process.env.DRIVE_FOLDER_ID,
+
+    // Supabase服務設定
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     
     // Vision API設定
     VISION_API_KEY: process.env.VISION_API_KEY,
