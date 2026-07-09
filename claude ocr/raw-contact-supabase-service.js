@@ -3,6 +3,7 @@ const https = require('https');
 const config = require('./config');
 
 const TABLE_NAME = 'raw_contact_captures';
+const SUPABASE_REQUEST_TIMEOUT_MS = 10_000;
 
 class SupabasePersistenceError extends Error {
     constructor(message, category, details = {}) {
@@ -126,7 +127,21 @@ class RawContactSupabaseService {
             });
 
             req.on('error', (error) => {
+                if (error instanceof SupabasePersistenceError) {
+                    reject(error);
+                    return;
+                }
                 reject(new SupabasePersistenceError(`Supabase request failed: ${error.message}`, 'retryable'));
+            });
+
+            req.setTimeout(SUPABASE_REQUEST_TIMEOUT_MS, () => {
+                req.destroy(
+                    new SupabasePersistenceError(
+                        'Supabase request timed out',
+                        'retryable',
+                        { statusCode: 408 }
+                    )
+                );
             });
 
             if (requestBody) req.write(requestBody);
